@@ -1,0 +1,98 @@
+---
+title: "Practical Machine Learning Project"
+author: "L Lathrop"
+date: "September 25, 2015"
+output: html_document
+---
+
+
+### Summary  
+
+### Loading global parameters 
+```{r}
+# Load the necessary packages
+library(caret)
+library(randomForest)
+library(AppliedPredictiveModeling)
+library(doMC)
+library(corrplot)
+library(rattle)
+```  
+  
+## Data processing and preprocessing  
+*We first read in the data from the training and testing sets.*  
+```{r}
+pmlTrain <- read.csv("pml-training.csv", header = TRUE, stringsAsFactors = FALSE)
+pmlTest <- read.csv("pml-testing.csv", header = TRUE, stringsAsFactors = FALSE)
+
+# Preprocess to remove columns with missing values
+pmlTrain <- pmlTrain[, colSums(is.na(pmlTrain)) == 0]
+pmlTest <- pmlTest[, colSums(is.na(pmlTest)) == 0]
+
+# Preprocess to remove the unnecessary variables
+pmlTrain <- pmlTrain[,-(1:7)]
+pmlTest <- pmlTest[,-(1:7)]
+
+# Transform 'classe' variable to factor variable
+pmlTrain$classe <- as.factor(pmlTrain$classe)
+
+# Now that we are done with preprocessing, we can segment the data set into training and validation sets
+inTrain <- createDataPartition(y = pmlTrain$classe,
+                               p = 0.60, list = FALSE)
+training <- pmlTrain[inTrain,]
+testing <- pmlTrain[-inTrain,]
+dim(training)
+```  
+There are now 11,776 observations of 86 variables in the training set, which is still a great many variables. So we will perform further preprocessing of the data.
+```{r}
+# Remove non-zero values from training and test sets
+nzv <- nearZeroVar(training, saveMetrics = TRUE)
+nzv <- nearZeroVar(training)
+filteredTrain <- training[, -nzv]
+dim(filteredTrain)
+
+nzv <- nearZeroVar(testing)
+filteredTest <- testing[, -nzv]
+```  
+  
+## Data modeling  
+The above gives us 11,776 observations of 53 variables in the training set. So we will fit a model using a Random Forest algorithm. Unlike bagging *(m = p)*, this method *(m < p)* automatically selects the most important variables and is more robust in terms of correlated covariates and outliers (James, Witten, Hastie, & Tibshirani, 2013). We will assess this using a *k*-fold cross validation in which *k* = 5.
+```{r cache = TRUE}
+registerDoMC(cores = 3)
+set.seed(1)
+fitControl <- trainControl(method = "cv", number = 5, 
+                           returnData = TRUE, 
+                           savePredictions = TRUE,
+                           classProbs = TRUE)
+modelFit <- train(classe ~ ., data=filteredTrain, method= "rf",
+                  trControl = fitControl, ntrees = 100,
+                  allowParallel = TRUE, prox = TRUE)
+modelFit
+
+```  
+  
+The argument `mtry = 27` indicates that 27 of the 53 predictors should be considered for each split of the tree (see Appendix A). From here, we apply the model to our validation (testing) data set.  
+```{r}
+prediction <- predict(modelFit, filteredTest)
+confusionMatrix(prediction, filteredTest$classe)
+```  
+
+Thus, the estimated accuracy of the model is 99.25%.
+  
+We will now apply the model to the original test data set.
+```{r}
+# Remove the "problem_id" variable from the data set.
+pmlTest <- pmlTest[,-20]
+finalResult <- predict(modelFit, pmlTest)
+finalResult
+```
+
+**References**
+James, G., Witten, D., Hastie, T., Tibshirani, R. (2013). *An Introduction to Statistical Learning: with Applications in R.* Springer, New York.
+
+## Appendix A
+```{r}
+modelImp <- varImp(modelFit)
+g <- ggplot(modelImp, aes(Overall), fill = Overall)
+g <- g + geom_histogram() +
+        theme()
