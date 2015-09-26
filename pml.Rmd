@@ -6,7 +6,8 @@ output: html_document
 ---
 
 
-### Summary  
+### Introduction    
+The use of devices such as *Jawbone Up, Nike FuelBand, and Fitbit* enables the collection of a large amount of data about personal activity. People who use such devices are able to quantify *how much* of a perticular activity they do, but they rarely quantify *how well* they do it. The goal of this project is to use data from the [Human Activity Recognition project](http://groupware.les.inf.puc-rio.br/har) to develop a model that predicts whether participants were performing barbell lifts correctly or incorrectly. The model will then be used on 20 different test cases.
 
 ### Loading global parameters 
 ```{r}
@@ -15,13 +16,14 @@ library(caret)
 library(randomForest)
 library(AppliedPredictiveModeling)
 library(doMC)
+library(RColorBrewer)
 library(corrplot)
 library(rattle)
 ```  
   
-## Data processing and preprocessing  
-*We first read in the data from the training and testing sets.*  
-```{r}
+### Data processing and preprocessing  
+We first read in the data from the training and testing sets.   
+```{r cache=TRUE}
 pmlTrain <- read.csv("pml-training.csv", header = TRUE, stringsAsFactors = FALSE)
 pmlTest <- read.csv("pml-testing.csv", header = TRUE, stringsAsFactors = FALSE)
 
@@ -55,8 +57,10 @@ nzv <- nearZeroVar(testing)
 filteredTest <- testing[, -nzv]
 ```  
   
-## Data modeling  
-The above gives us 11,776 observations of 53 variables in the training set. So we will fit a model using a Random Forest algorithm. Unlike bagging *(m = p)*, this method *(m < p)* automatically selects the most important variables and is more robust in terms of correlated covariates and outliers (James, Witten, Hastie, & Tibshirani, 2013). We will assess this using a *k*-fold cross validation in which *k* = 5.
+A correlation matrix (see Appendix A) shows that there are very few highly correlated variables, so it is not necessary to apply further preprocessing.  
+  
+### Data modeling  
+The above gives us 11,776 observations of 53 variables in the training set. So we will fit a model using a Random Forest algorithm. Unlike bagging *(m = p)*, this method *(m < p)* automatically selects the most important variables and is more robust in terms of correlated covariates and outliers (James, Witten, Hastie, & Tibshirani, 2013). We will assess this using a *k*-fold cross validation because it gives more accurate estimates of the test error rate. In this case, *k* = 5 as this value has been shown empirically to yield test error rate estimates that have neither excessively high bias nor very high variance (James, et al., 2013).  
 ```{r cache = TRUE}
 registerDoMC(cores = 3)
 set.seed(1)
@@ -71,28 +75,33 @@ modelFit
 
 ```  
   
-The argument `mtry = 27` indicates that 27 of the 53 predictors should be considered for each split of the tree (see Appendix A). From here, we apply the model to our validation (testing) data set.  
+The argument `mtry = 27` indicates that 27 of the 53 predictors should be considered for each split of the tree (see Appendix B). From here, we apply the model to our validation (testing) data set.  
 ```{r}
 prediction <- predict(modelFit, filteredTest)
 confusionMatrix(prediction, filteredTest$classe)
+modelFit$finalModel
 ```  
 
-Thus, the estimated accuracy of the model is 99.25%.
+Thus, the estimated accuracy of the model is 99.25%. The out-of-sample error rate is 0.83%.  
   
-We will now apply the model to the original test data set.
-```{r}
-# Remove the "problem_id" variable from the data set.
-pmlTest <- pmlTest[,-20]
-finalResult <- predict(modelFit, pmlTest)
-finalResult
-```
 
-**References**
+### References  
 James, G., Witten, D., Hastie, T., Tibshirani, R. (2013). *An Introduction to Statistical Learning: with Applications in R.* Springer, New York.
-
-## Appendix A
+  
+### Appendix A  
+#### Plot of the correlation matrix  
+```{r}
+corrDF <- as.data.frame(lapply(filteredTrain, as.numeric))
+correlation <- cor(corrDF)
+col1 <- brewer.pal(10, "Spectral")
+corrplot(correlation, method = "color", col = col1, 
+         tl.cex = 0.3,
+         tl.col = "black", tl.srt = 45)
+```  
+  
+### Appendix B  
+#### Plot of variable importance  
 ```{r}
 modelImp <- varImp(modelFit)
-g <- ggplot(modelImp, aes(Overall), fill = Overall)
-g <- g + geom_histogram() +
-        theme()
+plot(modelImp)
+```
