@@ -84,7 +84,18 @@ modelFit$finalModel
 
 Thus, the estimated accuracy of the model is 99.25%. The out-of-sample error rate is 0.83%.  
   
+pmlTest <- pmlTest[,-53]
+answers <- predict(modelFit, pmlTest)
+answers
+answers = c("B","A","B","A","A","E","D","B","A","A","B","C","B","A","E","E","A","B","B","B")
 
+pml_write_files = function(x){
+n = length(x)
+for(i in 1:n){
+filename = paste0("problem_id_",i,".txt")
+write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+}
+}
 ### References  
 James, G., Witten, D., Hastie, T., Tibshirani, R. (2013). *An Introduction to Statistical Learning: with Applications in R.* Springer, New York.
   
